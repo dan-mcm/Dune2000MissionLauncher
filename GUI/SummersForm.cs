@@ -304,8 +304,8 @@ namespace MissionLauncher.GUI
         private void ShowBriefingTab(Mission mission)
         {
             Missions.CurrentMission = mission;
-            BriefingRichTextBox.Text = mission.Briefing;
-            BriefingRichTextBox.ForeColor = BriefingRichTextBox.ForeColor;
+            // Apply formatting through RTF only
+            BriefingRichTextBox.Rtf = Missions.ParseBriefingColors(mission.Briefing);
             Missions.CurrentColorsFile = mission.ColorsFile;
             Missions.CurrentCampaignFolder = mission.CampaignFolder;
             Missions.CurrentModsFolder = mission.ModsFolder;

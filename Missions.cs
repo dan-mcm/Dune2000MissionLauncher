@@ -166,5 +166,92 @@ namespace MissionLauncher
                     }
                 }
         }
+
+        public static string ParseBriefingColors(string briefing)
+        {
+            if (string.IsNullOrEmpty(briefing))
+                return briefing;
+
+            // Define color markers and their corresponding RTF color codes
+            var colorMap = new Dictionary<string, string>
+            {
+                {"{red}", "\\cf1 "},
+                {"{green}", "\\cf2 "},
+                {"{blue}", "\\cf3 "},
+                {"{yellow}", "\\cf4 "},
+                {"{cyan}", "\\cf5 "},
+                {"{magenta}", "\\cf6 "},
+                {"{white}", "\\cf7 "},
+                {"{gray}", "\\cf8 "},
+                {"{orange}", "\\cf9 "},
+                {"{purple}", "\\cf10 "},
+                {"{brown}", "\\cf11 "},
+                {"{pink}", "\\cf12 "},
+                {"{lime}", "\\cf13 "},
+                {"{teal}", "\\cf14 "},
+                {"{navy}", "\\cf15 "},
+                {"{end}", "\\cf16 "}, // Just reset color without paragraph breaks
+                {"{endp}", "\\cf16\\par\\par "} // Reset color and add paragraph breaks
+            };
+
+            // Build RTF header with color table and default text properties
+            var rtf = @"{\rtf1\ansi\ansicpg1252\deff0\deflang1033" +
+                      @"{\fonttbl{\f0\fnil\fcharset0 Microsoft Sans Serif;}}" +
+                      @"{\colortbl ;" +
+                      @"\red255\green0\blue0;" +      // red (1)
+                      @"\red0\green255\blue0;" +      // green (2)
+                      @"\red0\green0\blue255;" +      // blue (3)
+                      @"\red255\green255\blue0;" +    // yellow (4)
+                      @"\red0\green255\blue255;" +    // cyan (5)
+                      @"\red255\green0\blue255;" +    // magenta (6)
+                      @"\red255\green255\blue255;" +  // white (7)
+                      @"\red128\green128\blue128;" +  // gray (8)
+                      @"\red255\green165\blue0;" +    // orange (9)
+                      @"\red128\green0\blue128;" +    // purple (10)
+                      @"\red165\green42\blue42;" +    // brown (11)
+                      @"\red255\green192\blue203;" +  // pink (12)
+                      @"\red0\green255\blue0;" +      // lime (13)
+                      @"\red0\green128\blue128;" +    // teal (14)
+                      @"\red0\green0\blue128;" +      // navy (15)
+                      @"\red192\green192\blue192;}" + // silver (16)
+                      @"\cf16\highlight0\pard\li500\par\par "; // Set default color to silver, default indentation, and initial spacing
+
+            // Process text for colors and preserve line breaks
+            var text = briefing;
+
+            // First handle line breaks
+            text = text.Replace("__", "\\par\\par ");
+
+            // Special handling for objectives and briefing sections
+            text = text.Replace("MISSION OBJECTIVES:", "\\par\\par MISSION OBJECTIVES:\\par ");
+            text = text.Replace("TACTICAL OBJECTIVES:", "\\par\\par TACTICAL OBJECTIVES:\\par ");
+            text = text.Replace("BRIEFING:", "\\par\\par BRIEFING:");  // Removed extra \par after BRIEFING
+            
+            // Handle numbered objectives (looking for patterns like "_1. ", "_2. ", etc.)
+            for (int i = 1; i <= 9; i++)
+            {
+                // Replace both patterns: "_1. " and "1. "
+                text = text.Replace($"_{i}. ", $"\\par {i}. ");
+                text = text.Replace($"{i}. ", $"\\par {i}. ");
+            }
+
+            // Handle remaining single underscores (that aren't part of numbered objectives)
+            text = text.Replace("_", "\\par\\par "); // Add double paragraph for more spacing
+
+            // Handle indentation for lines starting with spaces
+            text = text.Replace("\r\n     ", "\\par\\par\\pard\\li500 "); // Add extra spacing
+            text = text.Replace("\n     ", "\\par\\par\\pard\\li500 "); // Add extra spacing
+            text = text.Replace("     ", "\\pard\\li500 ");
+
+            // Replace color markers with RTF color codes
+            foreach (var color in colorMap)
+            {
+                text = text.Replace(color.Key, color.Value);
+            }
+
+            // Add the text and close RTF
+            rtf += text + "}";
+            return rtf;
+        }
     }
 }

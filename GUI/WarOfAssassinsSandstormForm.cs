@@ -75,7 +75,10 @@ namespace MissionLauncher.GUI
         private void ShowBriefingTab(Mission mission)
         {
             Missions.CurrentMission = mission;
-            BriefingRichTextBox.Text = mission.Briefing;
+            // First apply colors
+            BriefingRichTextBox.Rtf = Missions.ParseBriefingColors(mission.Briefing);
+            // Then set text with proper spacing
+            BriefingRichTextBox.Text = mission.Briefing.Replace("_", Environment.NewLine);
             BriefingRichTextBox.ForeColor = BriefingRichTextBox.ForeColor;
             tTabControl1.SelectTab("BriefingTab");
         }

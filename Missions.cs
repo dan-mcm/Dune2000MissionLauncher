@@ -15,6 +15,7 @@ namespace MissionLauncher
     {
         public string FileName;
         public string Briefing;
+        public string RawBriefing; // Briefing text without color tags
         public string Name;
         public int SideId;
         public int Number;
@@ -30,12 +31,35 @@ namespace MissionLauncher
             SideId = sideId;
             Name = name;
             Briefing = briefing;
+            RawBriefing = RemoveColorTags(briefing); // Store a version without color tags
             Number = number;
             TextUib = textUib;
             CampaignFolder = campaignFolder;
             ModsFolder = modsFolder;
             ColorsFile = colorsFile;
             IntelId = intelId;
+        }
+
+        private static string RemoveColorTags(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            // Define color tags to remove
+            var colorTags = new[]
+            {
+                "{red}", "{green}", "{blue}", "{yellow}", "{cyan}", "{magenta}",
+                "{white}", "{gray}", "{orange}", "{purple}", "{brown}", "{pink}",
+                "{lime}", "{teal}", "{navy}", "{end}", "{endp}"
+            };
+
+            // Remove each color tag
+            foreach (var tag in colorTags)
+            {
+                text = text.Replace(tag, "");
+            }
+
+            return text;
         }
     }
 
@@ -59,7 +83,13 @@ namespace MissionLauncher
         public static void StartMission(int difficultyLevel, bool isWol = false)
         {
             CampaignManagerService.HandleWolSpecialCase(isWol);
+            // Temporarily store the original briefing
+            string originalBriefing = CurrentMission.Briefing;
+            // Use the raw briefing without color tags for the game
+            CurrentMission.Briefing = CurrentMission.RawBriefing;
             StartMission(difficultyLevel, CurrentMission);
+            // Restore the original briefing with color tags
+            CurrentMission.Briefing = originalBriefing;
             CampaignManagerService.RestoreFiles();
             CampaignManagerService.RestoreColors();
         }
@@ -74,6 +104,15 @@ namespace MissionLauncher
             if (!string.IsNullOrEmpty(CurrentColorsFile))
             {
                 CampaignManagerService.InstallColors(CurrentColorsFile, CurrentCampaignFolder);
+            }
+
+            // Update the mission file with raw briefing text
+            string missionPath = Utils.PathCombine(MissionPath, mission.FileName + ".ini");
+            if (File.Exists(missionPath))
+            {
+                var missionIni = new IniFile(missionPath);
+                missionIni.SetStringValue("Basic", "Briefing", mission.RawBriefing.Replace(Environment.NewLine, "_"));
+                missionIni.WriteIni();
             }
 
             string spawnIniPath = Utils.PathCombine(Program.Path, "spawn.ini");
@@ -96,6 +135,14 @@ namespace MissionLauncher
                 psi.UseShellExecute = false;
             }
             Process.Start(psi)?.WaitForExit();
+
+            // Restore the original mission file
+            if (File.Exists(missionPath))
+            {
+                var missionIni = new IniFile(missionPath);
+                missionIni.SetStringValue("Basic", "Briefing", mission.Briefing.Replace(Environment.NewLine, "_"));
+                missionIni.WriteIni();
+            }
         }
 
         public static Mission GetMission(string fileName)
@@ -120,7 +167,6 @@ namespace MissionLauncher
 
         public static void Load()
         {
-            
             if (TextUib != null) return;
             string resourceCfgPath = Path.Combine(Program.Path, "RESOURCE.CFG");
             var resourceCfg = File.ReadAllLines(resourceCfgPath);
@@ -133,26 +179,29 @@ namespace MissionLauncher
                 foreach (string iniFile in iniFiles)
                 {
                     var mapIni = new IniFile(iniFile);
-                    var mission = new Mission();
-                    mission.SideId = mapIni.GetIntValue("Basic", "SideId", -1);
-                    if (mission.SideId == -1) continue;
+                    string fileName = Path.GetFileNameWithoutExtension(iniFile);
+                    int sideId = mapIni.GetIntValue("Basic", "SideId", -1);
+                    if (sideId == -1) continue;
 
-                    mission.FileName = Path.GetFileNameWithoutExtension(iniFile);
-                    mission.TextUib = mapIni.GetStringValue("Basic", "TextUib", "");
-                    mission.Briefing = mapIni.GetStringValue("Basic", "Briefing", "").Replace("_", Environment.NewLine);
-                    if (mission.Briefing == "")
+                    string textUib = mapIni.GetStringValue("Basic", "TextUib", "");
+                    string briefing = mapIni.GetStringValue("Basic", "Briefing", "").Replace("_", Environment.NewLine);
+                    if (briefing == "")
                     {
                         string briefingKey = mapIni.GetStringValue("Basic", "TextUibBriefingKey", "ääü+");
-                        if (mission.TextUib.Length == 0) mission.Briefing = TextUib.GetValue(briefingKey, "No Briefing...");
-                        else mission.Briefing = new UibFile(Utils.PathCombine(Program.Path, "data", "UI_DATA", mission.TextUib)).GetValue(briefingKey, "No Briefing...");
-                        mission.Briefing = mission.Briefing.Replace("¬", Environment.NewLine);
+                        if (textUib.Length == 0) briefing = TextUib.GetValue(briefingKey, "No Briefing...");
+                        else briefing = new UibFile(Utils.PathCombine(Program.Path, "data", "UI_DATA", textUib)).GetValue(briefingKey, "No Briefing...");
+                        briefing = briefing.Replace("¬", Environment.NewLine);
                     }
-                    mission.Name = mapIni.GetStringValue("Basic", "Name", mission.FileName);
-                    mission.Number = mapIni.GetIntValue("Basic", "MissionNumber", 0);
-                    mission.CampaignFolder = mapIni.GetStringValue("Data", "CampaignFolder", "");
-                    mission.ModsFolder = mapIni.GetStringValue("Data", "ModsFolder", "");
-                    mission.ColorsFile = mapIni.GetStringValue("Data", "ColoursFile", "");
-                    mission.IntelId = mapIni.GetStringValue("Data", "IntelId", "");
+                    string name = mapIni.GetStringValue("Basic", "Name", fileName);
+                    int number = mapIni.GetIntValue("Basic", "MissionNumber", 0);
+                    string campaignFolder = mapIni.GetStringValue("Data", "CampaignFolder", "");
+                    string modsFolder = mapIni.GetStringValue("Data", "ModsFolder", "");
+                    string colorsFile = mapIni.GetStringValue("Data", "ColoursFile", "");
+                    string intelId = mapIni.GetStringValue("Data", "IntelId", "");
+
+                    // Create mission using the constructor to properly initialize all fields including RawBriefing
+                    var mission = new Mission(fileName, briefing, name, sideId, number, textUib, campaignFolder, colorsFile, modsFolder, intelId);
+
                     switch (mission.SideId)
                     {
                         case 0: AtreidesMissions.Add(mission); break;

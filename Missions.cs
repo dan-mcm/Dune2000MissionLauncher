@@ -106,42 +106,52 @@ namespace MissionLauncher
                 CampaignManagerService.InstallColors(CurrentColorsFile, CurrentCampaignFolder);
             }
 
-            // Update the mission file with raw briefing text
-            string missionPath = Utils.PathCombine(MissionPath, mission.FileName + ".ini");
-            if (File.Exists(missionPath))
+            // Get the original mission file paths
+            string missionIniPath = Utils.PathCombine(MissionPath, mission.FileName + ".ini");
+            
+            try
             {
-                var missionIni = new IniFile(missionPath);
-                missionIni.SetStringValue("Basic", "Briefing", mission.RawBriefing.Replace(Environment.NewLine, "_"));
-                missionIni.WriteIni();
+                // Temporarily modify the original mission file
+                if (File.Exists(missionIniPath))
+                {
+                    var missionIni = new IniFile(missionIniPath);
+                    string originalBriefing = missionIni.GetStringValue("Basic", "Briefing", "");
+                    missionIni.SetStringValue("Basic", "Briefing", mission.RawBriefing.Replace(Environment.NewLine, "_"));
+                    missionIni.WriteIni();
+
+                    string spawnIniPath = Utils.PathCombine(Program.Path, "spawn.ini");
+                    if (File.Exists(spawnIniPath)) File.Delete(spawnIniPath);
+                    var spawnIni = new IniFile(spawnIniPath);
+                    spawnIni.SetStringValue("Settings", "Scenario", mission.FileName);
+                    spawnIni.SetIntValue("Settings", "MySideID", mission.SideId);
+                    spawnIni.SetIntValue("Settings", "MissionNumber", mission.Number);
+                    spawnIni.SetIntValue("Settings", "DifficultyLevel", difficultyLevel);
+                    spawnIni.SetIntValue("Settings", "Seed", new Random().Next(int.MaxValue));
+                    if (mission.TextUib.Length > 0) spawnIni.SetStringValue("Settings", "TextUib", mission.TextUib);
+                    spawnIni.WriteIni();
+
+                    var psi = new ProcessStartInfo(Utils.PathCombine(Program.Path, "dune2000.exe"));
+                    psi.WorkingDirectory = Program.Path;
+                    psi.Arguments = "-SPAWN";
+                    if (Environment.OSVersion.Version >= new Version(6, 2, 9200, 0))
+                    {
+                        psi.EnvironmentVariables["__COMPAT_LAYER"] += "DWM8And16BitMitigation 16BITCOLOR ";
+                        psi.UseShellExecute = false;
+                    }
+                    Process.Start(psi)?.WaitForExit();
+
+                    // Restore the original briefing
+                    missionIni.SetStringValue("Basic", "Briefing", originalBriefing);
+                    missionIni.WriteIni();
+                }
+                else
+                {
+                    MessageBox.Show($"Error: Could not find mission file: {missionIniPath}");
+                }
             }
-
-            string spawnIniPath = Utils.PathCombine(Program.Path, "spawn.ini");
-            if (File.Exists(spawnIniPath)) File.Delete(spawnIniPath);
-            var spawnIni = new IniFile(spawnIniPath);
-            spawnIni.SetStringValue("Settings", "Scenario", mission.FileName);
-            spawnIni.SetIntValue("Settings", "MySideID", mission.SideId);
-            spawnIni.SetIntValue("Settings", "MissionNumber", mission.Number);
-            spawnIni.SetIntValue("Settings", "DifficultyLevel", difficultyLevel);
-            spawnIni.SetIntValue("Settings", "Seed", new Random().Next(int.MaxValue));
-            if (mission.TextUib.Length > 0) spawnIni.SetStringValue("Settings", "TextUib", mission.TextUib);
-            spawnIni.WriteIni();
-
-            var psi = new ProcessStartInfo(Utils.PathCombine(Program.Path, "dune2000.exe"));
-            psi.WorkingDirectory = Program.Path;
-            psi.Arguments = "-SPAWN";
-            if (Environment.OSVersion.Version >= new Version(6, 2, 9200, 0))
+            catch (Exception ex)
             {
-                psi.EnvironmentVariables["__COMPAT_LAYER"] += "DWM8And16BitMitigation 16BITCOLOR ";
-                psi.UseShellExecute = false;
-            }
-            Process.Start(psi)?.WaitForExit();
-
-            // Restore the original mission file
-            if (File.Exists(missionPath))
-            {
-                var missionIni = new IniFile(missionPath);
-                missionIni.SetStringValue("Basic", "Briefing", mission.Briefing.Replace(Environment.NewLine, "_"));
-                missionIni.WriteIni();
+                MessageBox.Show($"Error starting mission: {ex.Message}");
             }
         }
 
